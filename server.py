@@ -1,76 +1,51 @@
+import threading
 import socket
-import select
 
-HOST = '127.0.0.1'
-PORT = 55555
-BUFFER_SIZE = 1024
+host = '127.0.0.1' # Localhost
+port = 55555
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-server.bind((HOST, PORT))
+server.bind((host, port))
 server.listen()
-server.setblocking(False)
+print(f"Server started on {host}:{port}")
 
-sockets_list = [server]
-clients = {}  # socket -> nickname
+clients = []
+nicknames = []
 
-print(f"Server started on {HOST}:{PORT}")
+def broadcast(message):
+    for client in clients:
+        client.send(message)
 
-def broadcast(message, sender_socket=None):
-    for sock in clients:
-        if sock != sender_socket:
-            sock.send(message)
+def handle(client):
+    while True:
+        try:
+            message = client.recv(1024)
+            broadcast(message)
+        except:
+            index = clients.index(client)
+            clients.remove(client)
+            client.close()
+            nickname = nicknames[index]
+            broadcast(f"{nickname} left the chat!".encode('utf-8'))
+            nicknames.remove(nickname)
+            break
 
-while True:
-    read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list)
+def receive():
+    while True:
+        client, address = server.accept()
+        print(f"Connected with {str(address)}")
 
-    for notified_socket in read_sockets:
+        client.send('NICK'.encode('utf-8'))
+        nickname = client.recv(1024).decode('utf-8')
+        nicknames.append(nickname)
+        clients.append(client)
 
-        # New connection
-        if notified_socket == server:
-            client_socket, client_address = server.accept()
-            client_socket.setblocking(False)
+        print(f"Username of the client is {nickname}")
+        broadcast(f"{nickname} joined the chat!".encode('utf-8'))
+        client.send('Connected to the server!'.encode('utf-8'))
 
-            sockets_list.append(client_socket)
-            client_socket.send(b"NICK")
+        thread = threading.Thread(target=handle, args=(client,))
+        thread.start()
 
-            print(f"Connection from {client_address}")
-
-        # Existing client sent a message
-        else:
-            try:
-                message = notified_socket.recv(BUFFER_SIZE)
-
-                # Client disconnected
-                if not message:
-                    nickname = clients[notified_socket]
-                    print(f"{nickname} disconnected")
-
-                    sockets_list.remove(notified_socket)
-                    del clients[notified_socket]
-                    notified_socket.close()
-
-                    broadcast(f"{nickname} left the chat!".encode())
-                    continue
-
-                # First message = nickname
-                if notified_socket not in clients:
-                    nickname = message.decode().strip()
-                    clients[notified_socket] = nickname
-                    print(f"Username set to {nickname}")
-                    broadcast(f"{nickname} joined the chat!".encode())
-                    notified_socket.send(b"Connected to the server!")
-                else:
-                    broadcast(message, notified_socket)
-
-            except:
-                nickname = clients.get(notified_socket, "Unknown")
-                sockets_list.remove(notified_socket)
-                clients.pop(notified_socket, None)
-                notified_socket.close()
-                broadcast(f"{nickname} left the chat!".encode())
-
-    for notified_socket in exception_sockets:
-        sockets_list.remove(notified_socket)
-        clients.pop(notified_socket, None)
-        notified_socket.close()
+print("Server is listening...")
+receive()
