@@ -1,31 +1,41 @@
 import socket
-import threading
+import select
+import sys
+
+HOST = '127.0.0.1'
+PORT = 55555
+BUFFER_SIZE = 1024
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect(('127.0.0.1', 55555))
+client.connect((HOST, PORT))
+client.setblocking(False)
 
 nickname = input("Choose your username: ")
 
-def receive():
-    while True:
-        try:
-            message = client.recv(1024).decode('utf-8')
-            if message == 'NICK':
-                client.send(nickname.encode('utf-8'))
+while True:
+    sockets = [client, sys.stdin]
+
+    read_sockets, _, _ = select.select(sockets, [], [])
+
+    for sock in read_sockets:
+
+        # Incoming server message
+        if sock == client:
+            message = client.recv(BUFFER_SIZE)
+            if not message:
+                print("Disconnected from server")
+                sys.exit()
+
+            decoded = message.decode()
+
+            if decoded == "NICK":
+                client.send(nickname.encode())
             else:
-                print(message)
-        except:
-            print("An error occurred!")
-            client.close()
-            break
+                print(decoded)
 
-
-def write():
-    while True:
-        message = f'{nickname}: {input("")}'
-        client.send(message.encode('utf-8'))
-thread_receive = threading.Thread(target=receive)
-thread_receive.start()
-thread_write = threading.Thread(target=write)
-thread_write.start()
+        # User typed something
+        else:
+            msg = sys.stdin.readline()
+            if msg:
+                client.send(f"{nickname}: {msg}".encode())
 
