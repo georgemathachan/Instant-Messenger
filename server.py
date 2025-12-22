@@ -1,51 +1,59 @@
-import threading  # Import threading module to handle multiple client connections simultaneously
-import socket  # Import socket module for network communication
+import threading
+import socket
 
-host = '127.0.0.1' # Localhost - server runs on local machine
-port = 55555  # Port number for server to listen on
+host = '127.0.0.1'
+port = 55555
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create TCP socket for IPv4
-server.bind((host, port))  # Bind socket to the host and port
-server.listen()  # Enable server to accept incoming connections
-print(f"Server started on {host}:{port}")  # Display server start confirmation
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind((host, port))
+server.listen()
+print(f"Server started on {host}:{port}")
 
-clients = []  # List to store all connected client socket objects
-nicknames = []  # List to store usernames corresponding to each client
+clients = []
+nicknames = []
 
-def broadcast(message):  # Function to send message to all connected clients
-    for client in clients:  # Iterate through all connected clients
-        client.send(message)  # Send the message to each client
+def broadcast(message, sender=None):
+    """
+    Send message to all clients except the sender.
+    If sender is None, send to everyone.
+    """
+    for client in clients:
+        if client != sender:
+            client.send(message)
 
-def handle(client):  # Function to handle individual client communication
-    while True:  # Infinite loop to continuously receive messages
-        try:  # Try block to catch connection errors
-            message = client.recv(1024)  # Receive up to 1024 bytes from client
-            broadcast(message)  # Broadcast received message to all clients
-        except:  # Catch exceptions (client disconnection or errors)
-            index = clients.index(client)  # Find the index of disconnected client
-            clients.remove(client)  # Remove client from clients list
-            client.close()  # Close the client socket connection
-            nickname = nicknames[index]  # Get the nickname of disconnected client
-            broadcast(f"{nickname} left the chat!".encode('utf-8'))  # Notify all clients of disconnection
-            nicknames.remove(nickname)  # Remove nickname from nicknames list
-            break  # Exit the loop for this client
+def handle(client):
+    while True:
+        try:
+            message = client.recv(1024)
+            broadcast(message, sender=client)  # don't send back to sender
+        except:
+            if client in clients:
+                index = clients.index(client)
+                clients.remove(client)
+                client.close()
+                nickname = nicknames[index]
+                nicknames.remove(nickname)
+                # Broadcast leave message to everyone else
+                broadcast(f"{nickname} left the chat!".encode('utf-8'))
+            break
 
-def receive():  # Function to accept new client connections
-    while True:  # Infinite loop to continuously accept new connections
-        client, address = server.accept()  # Accept incoming connection and get client socket and address
-        print(f"Connected with {str(address)}")  # Display connection information
+def receive():
+    while True:
+        client, address = server.accept()
+        print(f"Connected with {str(address)}")
 
-        client.send('NICK'.encode('utf-8'))  # Request nickname from newly connected client
-        nickname = client.recv(1024).decode('utf-8')  # Receive and decode the client's nickname
-        nicknames.append(nickname)  # Add nickname to the nicknames list
-        clients.append(client)  # Add client socket to clients list
+        client.send('NICK'.encode('utf-8'))
+        nickname = client.recv(1024).decode('utf-8')
+        nicknames.append(nickname)
+        clients.append(client)
 
-        print(f"Username of the client is {nickname}")  # Display the client's username
-        broadcast(f"{nickname} joined the chat!".encode('utf-8'))  # Notify all clients of new user
-        client.send('Connected to the server!'.encode('utf-8'))  # Send confirmation message to new client
+        print(f"Username of the client is {nickname}")
+        # Broadcast join message to everyone except the new client
+        broadcast(f"{nickname} joined the chat!".encode('utf-8'), sender=client)
+        client.send('Connected to the server!'.encode('utf-8'))
 
-        thread = threading.Thread(target=handle, args=(client,))  # Create new thread to handle this client
-        thread.start()  # Start the thread to begin handling client messages
+        thread = threading.Thread(target=handle, args=(client,))
+        thread.start()
 
-print("Server is listening...")  # Display server listening status
-receive()  # Start accepting client connections
+print("Server is listening...")
+receive()
