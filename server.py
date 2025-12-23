@@ -1,14 +1,25 @@
 import threading
 import socket
+import os
+
 
 host = '127.0.0.1'
 port = 55555
+file_port = 55556  # UDP port for file transfers
+shared_dir = os.environ.get("SERVER_SHARED_FILES", "./SharedFiles")
+
+# Create shared directory if it doesn't exist
+if not os.path.exists(shared_dir):
+    os.makedirs(shared_dir)
+    print(f"Created shared files directory: {shared_dir}")
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind((host, port))
 server.listen()
 print(f"Server started on {host}:{port}")
+print(f"File transfer port (UDP): {file_port}")
+print(f"Shared files directory: {shared_dir}")
 
 clients = []
 nicknames = []
@@ -33,6 +44,82 @@ def send_text(sock, text):
 def format_chat(nick, text):
     """Create standard chat line '<nick>: <text>'"""
     return f"{nick}: {text}"
+
+def get_file_list():
+    """Get list of files in shared directory with sizes."""
+    try:
+        files = []
+        for filename in os.listdir(shared_dir):
+            filepath = os.path.join(shared_dir, filename)
+            if os.path.isfile(filepath):
+                size = os.path.getsize(filepath)
+                files.append((filename, size))
+        return files
+    except Exception as e:
+        print(f"Error listing files: {e}")
+        return []
+
+def send_file_tcp(client_sock, filename):
+    """Send file to client via TCP."""
+    try:
+        filepath = os.path.join(shared_dir, filename)
+        if not os.path.exists(filepath):
+            send_text(client_sock, "FILE_ERROR:File not found")
+            return
+
+        filesize = os.path.getsize(filepath)
+        send_text(client_sock, f"FILE_START:{filename}:{filesize}")
+
+        with open(filepath, 'rb') as f:
+            while True:
+                chunk = f.read(4096)
+                if not chunk:
+                    break
+                client_sock.send(chunk)
+
+        send_text(client_sock, "FILE_END")
+        print(f"Sent file {filename} via TCP ({filesize} bytes)")
+    except Exception as e:
+        print(f"Error sending file {filename}: {e}")
+        send_text(client_sock, f"FILE_ERROR:{str(e)}")
+
+def handle_udp_file_transfer():
+    """Handle UDP file transfer requests."""
+    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_sock.bind((host, file_port))
+    print(f"UDP file transfer server listening on {host}:{file_port}")
+
+    while True:
+        try:
+            data, addr = udp_sock.recvfrom(1024)
+            request = data.decode('utf-8', errors='ignore')
+
+            if request.startswith('REQUEST:'):
+                filename = request.split(':', 1)[1]
+                filepath = os.path.join(shared_dir, filename)
+
+                if not os.path.exists(filepath):
+                    udp_sock.sendto(b"ERROR:File not found", addr)
+                    continue
+
+                filesize = os.path.getsize(filepath)
+                # Send file info
+                udp_sock.sendto(f"START:{filesize}".encode(), addr)
+
+                # Send file data in chunks
+                with open(filepath, 'rb') as f:
+                    seq = 0
+                    while True:
+                        chunk = f.read(1024)
+                        if not chunk:
+                            break
+                        udp_sock.sendto(f"DATA:{seq}:".encode() + chunk, addr)
+                        seq += 1
+
+                udp_sock.sendto(b"END", addr)
+                print(f"Sent file {filename} via UDP to {addr} ({filesize} bytes)")
+        except Exception as e:
+            print(f"UDP error: {e}")
 
 def handle(client):
     while True:
@@ -113,6 +200,31 @@ def handle(client):
                     for m in list(members):
                         if m != client:
                             send_text(m, f"[{group}] {sender_nick}: {text}")
+            elif decoded == '/files':
+                files = get_file_list()
+                if not files:
+                    send_text(client, "No files available in shared directory")
+                else:
+                    send_text(client, "FILES_LIST_START")
+                    for filename, size in files:
+                        send_text(client, f"FILE:{filename}:{size}")
+                    send_text(client, "FILES_LIST_END")
+
+            elif decoded.startswith('/download '):
+                parts = decoded.split()
+                if len(parts) < 3:
+                    send_text(client, "Usage: /download <filename> <tcp|udp>")
+                else:
+                    filename = parts[1]
+                    protocol = parts[2].lower()
+
+                    if protocol == 'tcp':
+                        send_file_tcp(client, filename)
+                    elif protocol == 'udp':
+                        # Send UDP server info to client
+                        send_text(client, f"UDP_INFO:{host}:{file_port}:{filename}")
+                    else:
+                        send_text(client, "Protocol must be 'tcp' or 'udp'")
 
             else:
                 # Normal broadcast chat
@@ -156,6 +268,10 @@ def receive():
 
         thread = threading.Thread(target=handle, args=(client,))
         thread.start()
+
+# Start UDP file transfer handler in background
+udp_thread = threading.Thread(target=handle_udp_file_transfer, daemon=True)
+udp_thread.start()
 
 print("Server is listening...")
 receive()
