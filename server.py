@@ -35,9 +35,9 @@ def broadcast(message, sender=None):
             client.send(message)
 
 def send_text(sock, text):
-    """Helper to send UTF-8 text as bytes."""
+    """Helper to send UTF-8 text as bytes with newline delimiter."""
     try:
-        sock.send(text.encode('utf-8'))
+        sock.sendall((text + "\n").encode('utf-8'))
     except:
         pass
 
