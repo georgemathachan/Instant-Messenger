@@ -17,9 +17,9 @@ Client 1 (George):
   > hello everyone
 
 Expected:
-- Frank sees: "George: hello everyone"
-- Rita sees: "George: hello everyone"
-- George does NOT see his own message echoed
+- Frank sees: "  [14:24:01] George: hello everyone"
+- Rita sees: "  [14:24:01] Rita: hello everyone"
+- George does NOT see his own message echoed (broadcast excludes sender)
 
 TEST 2: UNICAST (PRIVATE) MESSAGING
 ------------------------------------
@@ -27,27 +27,30 @@ Client 1 (George):
   > /msg Frank hey, can you help me?
 
 Expected:
-- George sees: "[To Frank] hey, can you help me?"
-- Frank sees: "[Private] George: hey, can you help me?"
-- Rita sees: nothing
+- George sees: "  [14:24:30] [To Frank] hey, can you help me?"
+- Frank sees: "  [14:24:30] [Private] George: hey, can you help me?"
+- Rita sees: nothing (unicast is one-to-one)
 
 TEST 3: GROUP MESSAGING (MULTICAST)
 ------------------------------------
 Client 1 (George):
   > /join football
+  Expected: "  [14:25:10] Joined group 'football'"
 
 Client 2 (Frank):
   > /join football
+  Expected: "  [14:25:15] Joined group 'football'"
 
 Client 3 (Rita):
   > /join coursework
+  Expected: "  [14:25:20] Joined group 'coursework'"
 
 Client 1 (George):
   > /group football anyone watching the match?
 
 Expected:
-- Frank sees: "[football] George: anyone watching the match?"
-- Rita sees: nothing (not in football group)
+- Frank sees: "  [14:25:25] [football] George: anyone watching the match?"
+- Rita sees: nothing (not in football group - multicast to group only)
 - George does NOT see his own group message
 
 TEST 4: FILE LISTING
@@ -56,6 +59,7 @@ Any Client:
   > /files
 
 Expected output:
+  [14:26:00] Accessed SharedFiles folder - 3 files available
 === Available Files ===
 document.pdf                   - 52,431 bytes
 image.jpg                      - 245,632 bytes
@@ -63,16 +67,18 @@ video.mp4                      - 5,242,880 bytes
 ======================
 Use: /download <filename> <tcp|udp>
 
+Note: File count and sizes sent via socket (not hardcoded)
+
 TEST 5: FILE DOWNLOAD (TCP)
 ----------------------------
 Client 1 (George):
   > /download document.pdf tcp
 
 Expected:
-- Progress shown
-- "[Downloaded] document.pdf via TCP - 52,431 bytes"
-- "[Saved to] George/document.pdf"
+- "  [14:26:15] [Downloaded] document.pdf via TCP - 52,431 bytes"
+- "  [14:26:15] [Saved to] George/document.pdf"
 - File exists in George/ directory
+- File transferred via network socket (reliable, ordered delivery)
 
 TEST 6: FILE DOWNLOAD (UDP)
 ----------------------------
@@ -80,24 +86,34 @@ Client 1 (George):
   > /download image.jpg udp
 
 Expected:
-- "[Downloaded] image.jpg via UDP - 245,632 bytes"
-- "[Saved to] George/image.jpg"
+- "  [14:26:30] [Downloaded] image.jpg via UDP - 245,632 bytes"
+- "  [14:26:30] [Saved to] George/image.jpg"
 - File exists in George/ directory
 - Verify file size matches original
+- File transferred via UDP (faster, connectionless)
 
 TEST 7: MODE SWITCHING
 ----------------------
 Client 1 (George):
   > hello everyone          # broadcast
+  Expected: "  [14:27:00] George: hello everyone" (all except George)
+
   > /msg Frank private      # unicast
+  Expected: "  [14:27:05] [To Frank] private"
+
   > /join team             # join group
+  Expected: "  [14:27:10] Joined group 'team'"
+
   > /group team hi team    # multicast
+  Expected: "  [14:27:15] [team] George: hi team" (team members only)
+
   > hello all again        # back to broadcast
+  Expected: "  [14:27:20] George: hello all again" (all except George)
 
 Expected:
-- All modes work sequentially
-- No reconnection needed
-- Messages routed correctly
+- All modes work sequentially without reconnection
+- Client can dynamically switch between broadcast, unicast, and multicast
+- Messages routed correctly based on mode
 
 TEST 8: HELP COMMAND
 --------------------
@@ -133,24 +149,53 @@ Client 1 (George):
 
 Expected:
 - George sees: "You have left the chat."
-- All other clients see: "George left the chat!"
+- All other clients see: "
+
+  [14:28:00] George left the chat!
+
+"
 - George removed from all groups
-- Server prints disconnect info
+- Server prints disconnect info with IP and port
+- Server continues running (doesn't crash)
 
 VERIFICATION CHECKLIST:
 -----------------------
+**Part 1.1 - Server/Client (8 marks):**
+[ ] Server prints connection info (IP + port)
+[ ] Client displays welcome message (sent via socket)
+[ ] Multiple clients connect successfully
+[ ] Input prompt available for messages
+[ ] "[username] has joined" on all clients
+[ ] /quit command leaves gracefully
+[ ] Unexpected disconnect handled
+[ ] Server doesn't crash on disconnect
+
+**Part 1.2 - Messaging (15 marks):**
+[ ] Multiple messages can be sent
 [ ] Broadcast excludes sender
-[ ] Unicast reaches only target
-[ ] Groups work independently
-[ ] Files list shows correct sizes
-[ ] TCP download completes successfully
-[ ] UDP download completes successfully
-[ ] Downloaded files are not corrupted
-[ ] File sizes match original
+[ ] Unicast reaches only target (/msg)
+[ ] Named groups can be joined/left
+[ ] Groups auto-create on first /join
+[ ] Multicast to group members only
 [ ] Mode switching works without reconnect
-[ ] Server handles multiple simultaneous clients
-[ ] Disconnect cleanup works properly
+
+**Part 1.3 - File Downloads (20 marks):**
+[ ] SharedFiles folder exists
+[ ] /files command accesses folder
+[ ] SERVER_SHARED_FILES env variable works
+[ ] Success message shows file count (via socket)
+[ ] File list displays correctly
+[ ] All file types can be downloaded
+[ ] Files saved to username folder
+[ ] Files transferred via socket (not hardcoded)
+[ ] TCP/UDP protocol selection works
+[ ] File sizes displayed in bytes (via socket)
+
+**Additional:**
+[ ] Timestamps on all messages [HH:MM:SS]
 [ ] Port reuse (SO_REUSEADDR) works on restart
+[ ] Downloaded files are not corrupted
+[ ] Command-line args work: python client.py [username] [host] [port]
 
 ERROR CASES TO TEST:
 --------------------

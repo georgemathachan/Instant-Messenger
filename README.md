@@ -58,67 +58,90 @@ If not set, defaults to `./SharedFiles`
 
 1. **Start the Server:**
 ```powershell
-python server.py
+python server.py [port]
 ```
+Example: `python server.py 12000`
+
 The server will:
-- Listen on TCP port 55555 for chat
-- Listen on UDP port 55556 for file transfers
+- Listen on the specified TCP port for chat (default: 55555)
+- Listen on UDP port (TCP port + 1) for file transfers
 - Create SharedFiles directory if it doesn't exist
+- Display connection information when clients connect (IP address and port)
 
 2. **Start Clients:**
+```powershell
+python client.py [username] [hostname] [port]
+```
+Example: `python client.py John 127.0.0.1 12000`
+
+Or simply run without arguments and enter details interactively:
 ```powershell
 python client.py
 ```
 - Enter your username when prompted
+- Receive a welcome message from the server
 - A folder with your username will be created for downloads
+- All messages display with timestamps in [HH:MM:SS] format
 
 ## Usage Examples
 
+All messages are displayed with timestamps in `[HH:MM:SS]` format.
+
+### Connection Messages
+```
+  [14:23:15] George joined the chat!
+
+  [14:23:42] Frank joined the chat!
+```
+
 ### Basic Chat
 ```
-George: hello everyone
-Frank: hi George!
+  [14:24:01] George: hello everyone
+  [14:24:05] Frank: hi George!
 ```
 
 ### Private Messaging
 ```
 /msg Frank want to grab coffee?
-[To Frank] want to grab coffee?
+  [14:24:30] [To Frank] want to grab coffee?
 
 # Frank sees:
-[Private] George: want to grab coffee?
+  [14:24:30] [Private] George: want to grab coffee?
 ```
 
 ### Group Chat
 ```
 # George and Frank join a group
 /join coursework
-Joined group 'coursework'
+  [14:25:10] Joined group 'coursework'
 
 # Send to group
 /group coursework anyone done the lab?
-# Only coursework members see: [coursework] George: anyone done the lab?
+# Only coursework members see:
+  [14:25:15] [coursework] George: anyone done the lab?
 ```
 
 ### File Sharing
 ```
 # List files
 /files
+  [14:26:00] Accessed SharedFiles folder - 3 files available
 === Available Files ===
 report.pdf                     - 245,632 bytes
 presentation.pptx              - 1,048,576 bytes
 data.csv                       - 12,345 bytes
 ======================
+Use: /download <filename> <tcp|udp>
 
 # Download via TCP
 /download report.pdf tcp
-[Downloaded] report.pdf via TCP - 245,632 bytes
-[Saved to] George/report.pdf
+  [14:26:15] [Downloaded] report.pdf via TCP - 245,632 bytes
+  [14:26:15] [Saved to] George/report.pdf
 
 # Download via UDP
 /download data.csv udp
-[Downloaded] data.csv via UDP - 12,345 bytes
-[Saved to] George/data.csv
+  [14:26:30] [Downloaded] data.csv via UDP - 12,345 bytes
+  [14:26:30] [Saved to] George/data.csv
 ```
 
 ## Architecture
@@ -142,9 +165,11 @@ data.csv                       - 12,345 bytes
 ## Technical Details
 
 ### Message Format
-- Chat: `<nickname>: <message>`
-- Private: `[Private] <sender>: <message>`
-- Group: `[<group>] <sender>: <message>`
+All messages include timestamps in `[HH:MM:SS]` format:
+- Chat: `[HH:MM:SS] <nickname>: <message>`
+- Private: `[HH:MM:SS] [Private] <sender>: <message>`
+- Group: `[HH:MM:SS] [<group>] <sender>: <message>`
+- Join/Leave: `[HH:MM:SS] <username> joined/left the chat!` (with extra spacing)
 
 ### File Transfer Protocol
 
