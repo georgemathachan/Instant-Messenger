@@ -95,7 +95,7 @@ def handle_udp_file_transfer():
             request = data.decode('utf-8', errors='ignore')
 
             if request.startswith('REQUEST:'):
-                filename = request.split(':', 1)[1]
+                filename = request.split(':', 1)[1].strip()
                 filepath = os.path.join(shared_dir, filename)
 
                 if not os.path.exists(filepath):

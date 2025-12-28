@@ -52,7 +52,7 @@ def receive_file_udp(host, port, filename):
         udp_sock.settimeout(5.0)
 
         # Request file
-        udp_sock.sendto(f"REQUEST:{filename}".encode(), (host, port))
+        udp_sock.sendto(f"REQUEST:{filename.strip()}".encode(), (host, port))
 
         # Receive start message with filesize
         data, _ = udp_sock.recvfrom(2048)
@@ -128,7 +128,7 @@ def receive():
             elif message.startswith('FILE_START:'):
                 parts = message.split(':', 2)
                 if len(parts) == 3:
-                    filename = parts[1]
+                    filename = parts[1].strip()
                     filesize = int(parts[2])
                     receiving_file = True
                     receive_file_tcp(filename, filesize)
@@ -140,7 +140,7 @@ def receive():
                 if len(parts) == 4:
                     udp_host = parts[1]
                     udp_port = int(parts[2])
-                    filename = parts[3]
+                    filename = parts[3].strip()
                     threading.Thread(target=receive_file_udp, args=(udp_host, udp_port, filename), daemon=True).start()
             else:
                 if not receiving_file:
