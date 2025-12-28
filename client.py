@@ -155,7 +155,6 @@ def write():
         text = input()
         if text == '/quit':
             running = False
-            client.send(f"{nickname} has left the chat.".encode('utf-8'))
             client.close()
             print("You have left the chat.")
             break
