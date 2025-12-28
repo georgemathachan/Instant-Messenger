@@ -1,6 +1,7 @@
 import socket
 import threading
 import os
+import time
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect(('127.0.0.1', 55555))
@@ -99,11 +100,13 @@ def receive_file_udp(host, port, filename):
         udp_sock.close()
 
 def display(message):
-    """Format and display messages with appropriate spacing."""
+    """Format and display messages with timestamps and appropriate spacing."""
+    timestamp = time.strftime("%H:%M:%S")
+
     if "joined the chat!" in message or "left the chat!" in message:
-        print(f"\n  {message}\n")
+        print(f"\n  [{timestamp}] {message}\n")
     else:
-        print(f"  {message}")
+        print(f"  [{timestamp}] {message}")
 
 def receive():
     global running, receiving_file
