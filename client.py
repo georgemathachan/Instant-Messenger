@@ -98,6 +98,13 @@ def receive_file_udp(host, port, filename):
     finally:
         udp_sock.close()
 
+def display(message):
+    """Format and display messages with appropriate spacing."""
+    if "joined the chat!" in message or "left the chat!" in message:
+        print(f"\n  {message}\n")
+    else:
+        print(f"  {message}")
+
 def receive():
     global running, receiving_file
     files_list = []
@@ -144,7 +151,7 @@ def receive():
                     threading.Thread(target=receive_file_udp, args=(udp_host, udp_port, filename), daemon=True).start()
             else:
                 if not receiving_file:
-                    print(message)
+                    display(message)
         except:
             break
     client.close()
